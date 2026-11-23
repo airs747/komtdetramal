@@ -1,0 +1,351 @@
+---
+import { CSV_URL, FORM_URL, CDA_URL, INFO_URL } from '../lib/config';
+
+// Tijdens het bouwen halen we de meldingen alvast op. Zo staat er direct iets op de pagina,
+// ook als het live ophalen in de browser om wat voor reden dan ook mislukt.
+let fallbackCsv = '';
+try {
+  const res = await fetch(CSV_URL, { signal: AbortSignal.timeout(10000) });
+  if (res.ok) fallbackCsv = await res.text();
+} catch {
+  fallbackCsv = '';
+}
+const fallbackJson = JSON.stringify(fallbackCsv).replace(/</g, '\\u003c');
+---
+<!doctype html>
+<html lang="nl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Komt de tram al? Meldingen Amstelveenlijn</title>
+  <meta name="description" content="Meldingen van reizigers over storingen op de Amstelveenlijn (lijn 6 en 25). Iedere week doorgestuurd naar GVB." />
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet" />
+</head>
+<body>
+  <header class="hero">
+    <div class="hero-inner">
+      <div class="hero-text">
+        <h1>Komt de tram al?</h1>
+        <p>
+          Meldingen van reizigers over de Amstelveenlijn (lijn 6 en 25). Iedere week sturen we, CDA Amstelveen, alle meldingen door naar GVB.{' '}
+          <a class="hero-link" href={CDA_URL}>Naar CDA Amstelveen</a>
+        </p>
+      </div>
+      <a class="cta" href={FORM_URL}>
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14"></path><path d="M5 12h14"></path></svg>
+        Meld een storing
+      </a>
+    </div>
+  </header>
+
+  <main>
+    <section class="card filters" aria-label="Filters">
+      <div class="group"><span class="group-label">Periode</span><div id="periods" class="pills"></div></div>
+      <div class="group"><span class="group-label">Richting</span><div id="dirs" class="pills"></div></div>
+      <div id="stop-filter" class="group" hidden>
+        <span class="group-label">Halte: <strong id="stop-name"></strong></span>
+        <button type="button" id="clear-stop" class="pill">Wis halte</button>
+      </div>
+    </section>
+
+    <p id="status" class="status" role="status">Meldingen laden…</p>
+
+    <section class="stats" aria-label="Kerncijfers">
+      <div class="card stat"><span class="stat-label">Meldingen</span><span id="stat-total" class="stat-value">–</span><span id="stat-period" class="stat-sub"></span></div>
+      <div class="card stat"><span class="stat-label">Gemiddeld per dag</span><span id="stat-perday" class="stat-value">–</span><span class="stat-sub">meldingen</span></div>
+      <div class="card stat"><span class="stat-label">Meeste meldingen</span><span id="stat-top" class="stat-value stat-value-small">–</span><span id="stat-top-count" class="stat-sub"></span></div>
+    </section>
+
+    <section class="card" aria-labelledby="chart-title">
+      <div class="card-head">
+        <h2 id="chart-title">Meldingen per dag</h2>
+        <span class="hint">Beweeg over een balk voor het aantal</span>
+      </div>
+      <div class="chart-scroll">
+        <div id="chart" class="chart" role="img" aria-label="Staafgrafiek met het aantal meldingen"></div>
+        <div id="chart-labels" class="chart-labels" aria-hidden="true"></div>
+      </div>
+    </section>
+
+    <div class="columns">
+      <section class="card stops" aria-labelledby="stops-title">
+        <h2 id="stops-title">Per halte</h2>
+        <p class="hint">Klik op een halte om alleen die meldingen te zien.</p>
+        <div id="stops"></div>
+      </section>
+
+      <section class="card latest" aria-labelledby="latest-title">
+        <h2 id="latest-title">Laatste meldingen</h2>
+        <div id="latest"></div>
+        <button type="button" id="more" class="more" hidden>Toon meer meldingen</button>
+      </section>
+    </div>
+
+    <footer>
+      <p>Meldingen verschijnen pas na controle, en alleen als de melder daar toestemming voor gaf. Contactgegevens publiceren we nooit.</p>
+      <p>Een initiatief van CDA Amstelveen. Meer informatie: <a href={INFO_URL}>cda-amstelveen.nl/lijn25</a></p>
+    </footer>
+  </main>
+
+  <script type="application/json" id="fallback-csv" set:html={fallbackJson}></script>
+
+  <script>
+    import { CSV_URL } from '../lib/config';
+    import { toMeldingen, type Melding } from '../lib/meldingen';
+
+    const DAY = 86400000;
+    const MONTHS = ['jan', 'feb', 'mrt', 'apr', 'mei', 'jun', 'jul', 'aug', 'sep', 'okt', 'nov', 'dec'];
+    const PERIODS = [
+      { v: 7, label: '7 dagen' },
+      { v: 30, label: '30 dagen' },
+      { v: 90, label: '3 maanden' },
+      { v: 0, label: 'Alles' },
+    ];
+
+    let data: Melding[] = [];
+    let dirOptions: string[] = [];
+    const state = { period: 30, dir: 'alle', stop: null as string | null, shown: 10 };
+
+    const $ = (id: string) => document.getElementById(id)!;
+    function el<K extends keyof HTMLElementTagNameMap>(tag: K, cls?: string, text?: string) {
+      const e = document.createElement(tag);
+      if (cls) e.className = cls;
+      if (text !== undefined) e.textContent = text;
+      return e;
+    }
+    const pad = (n: number) => (n < 10 ? '0' : '') + n;
+    const fmtDay = (d: Date) => d.getDate() + ' ' + MONTHS[d.getMonth()];
+    const startOfDay = (t: number) => { const d = new Date(t); d.setHours(0, 0, 0, 0); return d.getTime(); };
+
+    function setState(patch: Partial<typeof state>) {
+      Object.assign(state, patch);
+      if (!('shown' in patch)) state.shown = 10;
+      render();
+    }
+
+    function pill(label: string, on: boolean, onClick: () => void) {
+      const b = el('button', 'pill' + (on ? ' on' : ''), label);
+      b.type = 'button';
+      b.setAttribute('aria-pressed', String(on));
+      b.addEventListener('click', onClick);
+      return b;
+    }
+
+    function render() {
+      const today = startOfDay(Date.now());
+      const firstDay = data.length ? startOfDay(data[data.length - 1].t) : today;
+      const days = state.period || Math.max(1, Math.round((today - firstDay) / DAY) + 1);
+      const from = today - (days - 1) * DAY;
+
+      const base = data.filter((m) => m.t >= from && (state.dir === 'alle' || m.richting === state.dir));
+      const filtered = base.filter((m) => !state.stop || m.halte === state.stop);
+
+      // Filters
+      $('periods').replaceChildren(...PERIODS.map((p) => pill(p.label, p.v === state.period, () => setState({ period: p.v }))));
+      $('dirs').replaceChildren(
+        pill('Beide', state.dir === 'alle', () => setState({ dir: 'alle' })),
+        ...dirOptions.map((d) => pill(d, state.dir === d, () => setState({ dir: d }))),
+      );
+      $('stop-filter').hidden = !state.stop;
+      $('stop-name').textContent = state.stop || '';
+
+      // Kerncijfers
+      const periodLabel = PERIODS.find((p) => p.v === state.period)!.label;
+      $('stat-total').textContent = String(filtered.length);
+      $('stat-period').textContent = state.period ? 'in de afgelopen ' + periodLabel : 'sinds de start';
+      $('stat-perday').textContent = (filtered.length / days).toFixed(1).replace('.', ',');
+      const byStop = new Map<string, number>();
+      base.forEach((m) => byStop.set(m.halte, (byStop.get(m.halte) || 0) + 1));
+      const ranked = [...byStop.entries()].sort((a, b) => b[1] - a[1]);
+      $('stat-top').textContent = ranked.length ? ranked[0][0] : 'Geen';
+      $('stat-top-count').textContent = ranked.length ? ranked[0][1] + ' meldingen' : '';
+
+      // Grafiek: per dag tot 30 dagen, anders per week
+      const daily = days <= 31;
+      const size = daily ? 1 : 7;
+      const nb = Math.ceil(days / size);
+      const counts = new Array(nb).fill(0);
+      filtered.forEach((m) => {
+        const age = Math.floor((today - startOfDay(m.t)) / DAY);
+        const idx = nb - 1 - Math.floor(age / size);
+        if (idx >= 0 && idx < nb) counts[idx]++;
+      });
+      const max = Math.max(1, ...counts);
+      const step = daily ? (nb > 7 ? 5 : 1) : Math.max(1, Math.ceil(nb / 10));
+      $('chart-title').textContent = 'Meldingen per ' + (daily ? 'dag' : 'week');
+      $('chart').setAttribute('aria-label', 'Staafgrafiek met het aantal meldingen per ' + (daily ? 'dag' : 'week'));
+      const bars: HTMLElement[] = [];
+      const labels: HTMLElement[] = [];
+      counts.forEach((c, j) => {
+        const back = nb - 1 - j;
+        const end = new Date(today - back * size * DAY);
+        const tip = (daily ? fmtDay(end) : 'week t/m ' + fmtDay(end)) + ': ' + c + (c === 1 ? ' melding' : ' meldingen');
+        const col = el('div', 'bar-col');
+        col.title = tip;
+        col.append(el('span', 'bar-count', c > 0 && nb <= 31 ? String(c) : ''));
+        const bar = el('div', 'bar');
+        bar.style.height = Math.round((c / max) * 160) + 'px';
+        col.append(bar);
+        bars.push(col);
+        labels.push(el('span', '', back % step === 0 ? fmtDay(end) : ''));
+      });
+      $('chart').replaceChildren(...bars);
+      $('chart-labels').replaceChildren(...labels);
+
+      // Per halte
+      const smax = ranked.length ? ranked[0][1] : 1;
+      $('stops').replaceChildren(...ranked.slice(0, 10).map(([name, count]) => {
+        const on = name === state.stop;
+        const b = el('button', 'stop-row' + (on ? ' on' : ''));
+        b.type = 'button';
+        b.setAttribute('aria-pressed', String(on));
+        const top = el('span', 'stop-top');
+        top.append(el('span', 'stop-name', name), el('span', 'stop-count', String(count)));
+        const track = el('span', 'track');
+        const fill = el('span', 'fill');
+        fill.style.width = Math.round((count / smax) * 100) + '%';
+        track.append(fill);
+        b.append(top, track);
+        b.addEventListener('click', () => setState({ stop: on ? null : name }));
+        return b;
+      }));
+
+      // Laatste meldingen: alleen meldingen met tekst. Oudere meldingen (van voor het nieuwe formulier)
+      // hebben geen tekst en tellen alleen mee in de cijfers en de grafiek.
+      const withText = filtered.filter((m) => m.tekst);
+      const items = withText.slice(0, state.shown);
+      if (!items.length) {
+        $('latest').replaceChildren(el('p', 'hint', 'Geen gepubliceerde meldingen voor deze selectie.'));
+      } else {
+        $('latest').replaceChildren(...items.map((m) => {
+          const a = el('article', 'melding');
+          const meta = el('div', 'meta');
+          const d = new Date(m.t);
+          const time = el('time', '', fmtDay(d) + ', ' + pad(d.getHours()) + ':' + pad(d.getMinutes()));
+          time.setAttribute('datetime', d.toISOString());
+          meta.append(el('strong', '', m.halte));
+          if (m.richting) meta.append(el('span', '', m.richting));
+          meta.append(time);
+          a.append(meta, el('p', '', m.tekst));
+          return a;
+        }));
+      }
+      $('more').hidden = withText.length <= state.shown;
+    }
+
+    function load(csv: string, live: boolean) {
+      data = toMeldingen(csv);
+      dirOptions = [...new Set(data.map((m) => m.richting).filter(Boolean))].sort();
+      const status = $('status');
+      if (!data.length) {
+        status.textContent = live ? 'Er zijn nog geen meldingen gepubliceerd.' : 'De meldingen konden niet worden geladen. Probeer het later opnieuw.';
+        status.hidden = false;
+      } else {
+        status.hidden = live;
+        if (!live) status.textContent = 'Live gegevens niet bereikbaar; dit is de laatst bekende stand.';
+      }
+      render();
+    }
+
+    $('clear-stop').addEventListener('click', () => setState({ stop: null }));
+    $('more').addEventListener('click', () => setState({ shown: state.shown + 10 }));
+
+    const fallback = JSON.parse($('fallback-csv').textContent || '""') as string;
+    if (fallback) load(fallback, false);
+
+    fetch(CSV_URL, { cache: 'no-store' })
+      .then((r) => { if (!r.ok) throw new Error(String(r.status)); return r.text(); })
+      .then((csv) => load(csv, true))
+      .catch(() => { if (!fallback) load('', false); });
+  </script>
+
+  <style is:global>
+    :root {
+      --ink: #14213d;
+      --muted: #4a5568;
+      --line: #e6eaf0;
+      --border: #cbd2de;
+      --bg: #f4f6f9;
+      --accent: #1d4ed8;
+      --orange: #c2410c;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--bg); color: var(--ink); font-family: Inter, system-ui, sans-serif; }
+    a { color: var(--accent); }
+    a:hover { color: #1e3a8a; }
+    button { font-family: inherit; }
+    h1, h2, .stat-value { font-family: 'Space Grotesk', Inter, sans-serif; }
+
+    .hero { background: var(--ink); color: #fff; padding: 40px 24px 48px; }
+    .hero-inner { max-width: 1120px; margin: 0 auto; display: flex; flex-wrap: wrap; gap: 24px; align-items: flex-end; justify-content: space-between; }
+    .hero-text { max-width: 680px; display: flex; flex-direction: column; gap: 10px; }
+    .hero h1 { margin: 0; font-size: clamp(36px, 6vw, 52px); line-height: 1.05; }
+    .hero p { margin: 0; font-size: 18px; line-height: 1.5; color: #d6dce8; }
+    .hero-link { color: #fde68a; white-space: nowrap; }
+    .hero-link:hover { color: #fff; }
+    .cta { display: inline-flex; align-items: center; gap: 10px; background: var(--orange); color: #fff; text-decoration: none; font-weight: 600; font-size: 17px; padding: 14px 22px; border-radius: 10px; min-height: 44px; }
+    .cta:hover { background: #9a3412; color: #fff; }
+
+    main { max-width: 1120px; margin: -24px auto 0; padding: 0 24px 64px; display: flex; flex-direction: column; gap: 24px; }
+    .card { background: #fff; border-radius: 14px; padding: 24px; box-shadow: 0 1px 3px rgba(20, 33, 61, 0.08); }
+    .card h2 { margin: 0; font-size: 22px; }
+    .card-head { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; align-items: baseline; margin-bottom: 16px; }
+    .hint { font-size: 13px; color: var(--muted); margin: 0; }
+
+    .filters { padding: 16px 20px; display: flex; flex-wrap: wrap; gap: 16px 28px; align-items: center; }
+    .group { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+    .group[hidden] { display: none; }
+    .group-label { font-size: 14px; font-weight: 600; color: var(--muted); margin-right: 4px; }
+    .group-label strong { color: var(--ink); }
+    .pills { display: flex; flex-wrap: wrap; gap: 8px; }
+    .pill { border: 1px solid var(--border); background: #fff; color: var(--ink); border-radius: 999px; padding: 8px 14px; font-size: 14px; font-weight: 500; cursor: pointer; min-height: 44px; }
+    .pill.on { background: var(--ink); border-color: var(--ink); color: #fff; }
+
+    .status { margin: 0; font-size: 14px; color: var(--muted); }
+    .status[hidden] { display: none; }
+
+    .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; }
+    .stat { padding: 20px; display: flex; flex-direction: column; gap: 6px; }
+    .stat-label { font-size: 14px; color: var(--muted); }
+    .stat-value { font-size: 40px; font-weight: 700; }
+    .stat-value-small { font-size: 28px; line-height: 1.2; }
+    .stat-sub { font-size: 13px; color: var(--muted); }
+
+    .chart-scroll { overflow-x: auto; }
+    .chart { display: flex; align-items: flex-end; gap: 4px; height: 200px; min-width: 520px; border-bottom: 1px solid var(--border); padding-top: 8px; }
+    .bar-col { flex: 1 1 0; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; height: 100%; gap: 4px; }
+    .bar-count { font-size: 11px; color: var(--muted); }
+    .bar { width: 100%; max-width: 36px; background: var(--accent); border-radius: 4px 4px 0 0; }
+    .chart-labels { display: flex; gap: 4px; min-width: 520px; padding-top: 6px; }
+    .chart-labels span { flex: 1 1 0; text-align: center; font-size: 11px; color: var(--muted); white-space: nowrap; }
+
+    .columns { display: flex; flex-wrap: wrap; gap: 24px; align-items: flex-start; }
+    .stops { flex: 1 1 320px; min-width: 0; display: flex; flex-direction: column; gap: 12px; }
+    .latest { flex: 999 1 520px; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+    .latest h2 { margin-bottom: 8px; }
+
+    .stop-row { display: flex; flex-direction: column; gap: 6px; width: 100%; text-align: left; border: 1px solid transparent; background: #fff; color: var(--ink); border-radius: 8px; padding: 8px 10px; cursor: pointer; min-height: 44px; }
+    .stop-row:hover { background: var(--bg); }
+    .stop-row.on { border-color: var(--orange); background: #fff4ed; }
+    .stop-top { display: flex; justify-content: space-between; gap: 8px; font-size: 14px; }
+    .stop-name { font-weight: 500; }
+    .stop-count { color: var(--muted); }
+    .track { display: block; height: 8px; background: var(--line); border-radius: 4px; overflow: hidden; }
+    .fill { display: block; height: 8px; background: var(--accent); border-radius: 4px; }
+    .stop-row.on .fill { background: var(--orange); }
+
+    .melding { display: flex; flex-direction: column; gap: 6px; padding: 14px 0; border-top: 1px solid var(--line); }
+    .melding .meta { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 13px; color: var(--muted); }
+    .melding .meta strong { color: var(--ink); }
+    .melding p { margin: 0; font-size: 16px; line-height: 1.5; white-space: pre-line; overflow-wrap: anywhere; }
+    .more { margin-top: 8px; align-self: flex-start; border: 1px solid var(--border); background: #fff; color: var(--ink); border-radius: 10px; padding: 10px 16px; font-size: 15px; font-weight: 500; cursor: pointer; min-height: 44px; }
+    .more[hidden] { display: none; }
+
+    footer { font-size: 14px; line-height: 1.6; color: var(--muted); }
+    footer p { margin: 0 0 6px; }
+  </style>
+</body>
+</html>
