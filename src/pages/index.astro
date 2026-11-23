@@ -62,7 +62,7 @@ const fallbackJson = JSON.stringify(fallbackCsv).replace(/</g, '\\u003c');
     <section class="card" aria-labelledby="chart-title">
       <div class="card-head">
         <h2 id="chart-title">Meldingen per dag</h2>
-        <span class="hint">Beweeg over een balk voor het aantal</span>
+        <span id="chart-info" class="chart-info" aria-live="polite">Beweeg over of tik op een balk voor het aantal</span>
       </div>
       <div class="chart-scroll">
         <div id="chart" class="chart" role="img" aria-label="Staafgrafiek met het aantal meldingen"></div>
@@ -185,7 +185,18 @@ const fallbackJson = JSON.stringify(fallbackCsv).replace(/</g, '\\u003c');
         const end = new Date(today - back * size * DAY);
         const tip = (daily ? fmtDay(end) : 'week t/m ' + fmtDay(end)) + ': ' + c + (c === 1 ? ' melding' : ' meldingen');
         const col = el('div', 'bar-col');
-        col.title = tip;
+        col.tabIndex = 0;
+        col.setAttribute('aria-label', tip);
+        const show = () => {
+          $('chart').querySelectorAll('.bar-col.active').forEach((x) => x.classList.remove('active'));
+          col.classList.add('active');
+          const info = $('chart-info');
+          info.textContent = tip;
+          info.classList.add('on');
+        };
+        col.addEventListener('pointerenter', show);
+        col.addEventListener('click', show);
+        col.addEventListener('focus', show);
         col.append(el('span', 'bar-count', c > 0 && nb <= 31 ? String(c) : ''));
         const bar = el('div', 'bar');
         bar.style.height = Math.round((c / max) * 160) + 'px';
@@ -194,6 +205,7 @@ const fallbackJson = JSON.stringify(fallbackCsv).replace(/</g, '\\u003c');
         labels.push(el('span', '', back % step === 0 ? fmtDay(end) : ''));
       });
       $('chart').replaceChildren(...bars);
+      resetChartInfo();
       $('chart-labels').replaceChildren(...labels);
 
       // Per halte
@@ -259,6 +271,14 @@ const fallbackJson = JSON.stringify(fallbackCsv).replace(/</g, '\\u003c');
       }
       render();
     }
+
+    function resetChartInfo() {
+      const info = $('chart-info');
+      info.textContent = 'Beweeg over of tik op een balk voor het aantal';
+      info.classList.remove('on');
+      $('chart').querySelectorAll('.bar-col.active').forEach((x) => x.classList.remove('active'));
+    }
+    $('chart').addEventListener('pointerleave', (e) => { if ((e as PointerEvent).pointerType === 'mouse') resetChartInfo(); });
 
     $('clear-stop').addEventListener('click', () => setState({ stop: null }));
     $('more').addEventListener('click', () => setState({ shown: state.shown + 10 }));
@@ -329,6 +349,11 @@ const fallbackJson = JSON.stringify(fallbackCsv).replace(/</g, '\\u003c');
     .bar-col { flex: 1 1 0; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; height: 100%; gap: 4px; }
     .bar-count { font-size: 11px; color: var(--muted); }
     .bar { width: 100%; max-width: 36px; background: var(--accent); border-radius: 4px 4px 0 0; }
+    .bar-col { cursor: pointer; outline: none; }
+    .bar-col:hover .bar, .bar-col.active .bar { background: var(--orange); }
+    .bar-col:focus-visible .bar { outline: 2px solid var(--ink); outline-offset: 2px; }
+    .chart-info { font-size: 13px; color: var(--muted); }
+    .chart-info.on { font-size: 15px; font-weight: 600; color: var(--ink); }
     .chart-labels { display: flex; gap: 4px; min-width: 520px; padding-top: 6px; }
     .chart-labels span { flex: 1 1 0; text-align: center; font-size: 11px; color: var(--muted); white-space: nowrap; }
 
