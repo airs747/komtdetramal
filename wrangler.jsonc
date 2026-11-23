@@ -1,0 +1,8 @@
+{
+  // Cloudflare Workers: serveer de gebouwde Astro-site (map dist) als statische bestanden.
+  "name": "komtdetramal",
+  "compatibility_date": "2026-11-01",
+  "assets": {
+    "directory": "./dist"
+  }
+}

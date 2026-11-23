@@ -18,10 +18,12 @@ npm install
 npm run dev
 ```
 
-## Publiceren via Cloudflare Pages
+## Publiceren via Cloudflare
 
-1. Cloudflare dashboard › Workers & Pages › Create › Pages › Connect to Git, kies `airs747/komtdetramal`.
-2. Framework preset: Astro. Build command: `npm run build`. Output directory: `dist`.
-3. Daarna onder Custom domains `komtdetramal.nl` en `www.komtdetramal.nl` toevoegen.
+De site draait als Cloudflare Worker met statische bestanden. De instellingen staan in `wrangler.jsonc` (map `dist`).
+
+1. Cloudflare dashboard › Workers › Create › importeer `airs747/komtdetramal` vanuit GitHub.
+2. Build command: `npm run build`. Deploy command: `npx wrangler deploy`.
+3. Daarna onder Settings › Domains & Routes `komtdetramal.nl` en `www.komtdetramal.nl` toevoegen.
 
 Elke push naar `main` zet de site automatisch opnieuw online.
