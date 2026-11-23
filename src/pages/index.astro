@@ -28,16 +28,21 @@ const fallbackJson = JSON.stringify(fallbackCsv).replace(/</g, '\\u003c');
   <header class="hero">
     <div class="hero-inner">
       <div class="hero-text">
-        <h1>Komt de tram al?</h1>
+        <h1><a class="home-link" href="/">“Komt de tram al?”</a></h1>
         <p>
           Meldingen van reizigers over de Amstelveenlijn (lijn 6 en 25). Periodiek sturen we, CDA Amstelveen, een overzicht van de meldingen naar GVB.{' '}
           <a class="hero-link" href={CDA_URL}>Naar CDA Amstelveen</a>
         </p>
       </div>
-      <a class="cta" href={FORM_URL}>
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14"></path><path d="M5 12h14"></path></svg>
-        Meld een storing
-      </a>
+      <div class="hero-side">
+        <a class="logo" href={CDA_URL} aria-label="CDA Amstelveen">
+          <img src="/cda-amstelveen.png" alt="CDA Amstelveen" width="96" height="98" />
+        </a>
+        <a class="cta" href={FORM_URL}>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14"></path><path d="M5 12h14"></path></svg>
+          Meld een storing
+        </a>
+      </div>
     </div>
   </header>
 
@@ -48,6 +53,10 @@ const fallbackJson = JSON.stringify(fallbackCsv).replace(/</g, '\\u003c');
       <div id="stop-filter" class="group" hidden>
         <span class="group-label">Halte: <strong id="stop-name"></strong></span>
         <button type="button" id="clear-stop" class="pill">Wis halte</button>
+      </div>
+      <div id="day-filter" class="group" hidden>
+        <span class="group-label"><span id="day-kind">Dag</span>: <strong id="day-name"></strong></span>
+        <button type="button" id="clear-day" class="pill">Wis</button>
       </div>
     </section>
 
@@ -108,7 +117,8 @@ const fallbackJson = JSON.stringify(fallbackCsv).replace(/</g, '\\u003c');
 
     let data: Melding[] = [];
     let dirOptions: string[] = [];
-    const state = { period: 30, dir: 'alle', stop: null as string | null, shown: 10 };
+    type Sel = { start: number; end: number; label: string; daily: boolean };
+    const state = { period: 30, dir: 'alle', stop: null as string | null, sel: null as Sel | null, shown: 10 };
 
     const $ = (id: string) => document.getElementById(id)!;
     function el<K extends keyof HTMLElementTagNameMap>(tag: K, cls?: string, text?: string) {
@@ -124,6 +134,7 @@ const fallbackJson = JSON.stringify(fallbackCsv).replace(/</g, '\\u003c');
     function setState(patch: Partial<typeof state>) {
       Object.assign(state, patch);
       if (!('shown' in patch)) state.shown = 10;
+      if ('period' in patch) state.sel = null;
       render();
     }
 
@@ -152,6 +163,9 @@ const fallbackJson = JSON.stringify(fallbackCsv).replace(/</g, '\\u003c');
       );
       $('stop-filter').hidden = !state.stop;
       $('stop-name').textContent = state.stop || '';
+      $('day-filter').hidden = !state.sel;
+      $('day-kind').textContent = state.sel && !state.sel.daily ? 'Week' : 'Dag';
+      $('day-name').textContent = state.sel ? state.sel.label : '';
 
       // Kerncijfers
       const periodLabel = PERIODS.find((p) => p.v === state.period)!.label;
@@ -183,8 +197,13 @@ const fallbackJson = JSON.stringify(fallbackCsv).replace(/</g, '\\u003c');
       counts.forEach((c, j) => {
         const back = nb - 1 - j;
         const end = new Date(today - back * size * DAY);
-        const tip = (daily ? fmtDay(end) : 'week t/m ' + fmtDay(end)) + ': ' + c + (c === 1 ? ' melding' : ' meldingen');
-        const col = el('div', 'bar-col');
+        const bStart = end.getTime() - (size - 1) * DAY;
+        const bEnd = end.getTime() + DAY;
+        const label = daily ? fmtDay(end) : fmtDay(new Date(bStart)) + ' t/m ' + fmtDay(end);
+        const tip = (daily ? label : 'week ' + label) + ': ' + c + (c === 1 ? ' melding' : ' meldingen');
+        const isSel = !!state.sel && state.sel.start === bStart;
+        const col = el('div', 'bar-col' + (isSel ? ' selected' : ''));
+        col.setAttribute('aria-pressed', String(isSel));
         col.tabIndex = 0;
         col.setAttribute('aria-label', tip);
         const show = () => {
@@ -195,8 +214,14 @@ const fallbackJson = JSON.stringify(fallbackCsv).replace(/</g, '\\u003c');
           info.classList.add('on');
         };
         col.addEventListener('pointerenter', show);
-        col.addEventListener('click', show);
         col.addEventListener('focus', show);
+        const pick = () => {
+          setState({ sel: isSel ? null : { start: bStart, end: bEnd, label, daily } });
+          const sec = document.querySelector('.latest') as HTMLElement;
+          if (!isSel && sec.getBoundingClientRect().top > window.innerHeight * 0.6) sec.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        };
+        col.addEventListener('click', pick);
+        col.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); pick(); } });
         col.append(el('span', 'bar-count', c > 0 && nb <= 31 ? String(c) : ''));
         const bar = el('div', 'bar');
         bar.style.height = Math.round((c / max) * 160) + 'px';
@@ -228,11 +253,16 @@ const fallbackJson = JSON.stringify(fallbackCsv).replace(/</g, '\\u003c');
 
       // Laatste meldingen: alleen meldingen met tekst. Oudere meldingen (van voor het nieuwe formulier)
       // hebben geen tekst en tellen alleen mee in de cijfers en de grafiek.
-      const withText = filtered.filter((m) => m.tekst);
+      const sel = state.sel;
+      const listSource = sel ? filtered.filter((m) => m.t >= sel.start && m.t < sel.end) : filtered;
+      let title = sel ? 'Meldingen ' + (sel.daily ? 'op ' : 'in de week van ') + sel.label : 'Laatste meldingen';
+      if (state.stop) title += ' bij ' + state.stop;
+      $('latest-title').textContent = title;
+      const withText = listSource.filter((m) => m.tekst);
       const items = withText.slice(0, state.shown);
-      const noText = filtered.length - withText.length;
+      const noText = listSource.length - withText.length;
       if (!items.length) {
-        const msg = filtered.length
+        const msg = listSource.length
           ? 'Voor deze selectie zijn er wel meldingen, maar we tonen geen details.'
           : 'Geen meldingen voor deze selectie.';
         $('latest').replaceChildren(el('p', 'hint', msg));
@@ -277,10 +307,15 @@ const fallbackJson = JSON.stringify(fallbackCsv).replace(/</g, '\\u003c');
       info.textContent = 'Beweeg over of tik op een balk voor het aantal';
       info.classList.remove('on');
       $('chart').querySelectorAll('.bar-col.active').forEach((x) => x.classList.remove('active'));
+      if (state.sel) {
+        const tip = $('chart').querySelector('.bar-col.selected')?.getAttribute('aria-label');
+        if (tip) { info.textContent = tip; info.classList.add('on'); }
+      }
     }
     $('chart').addEventListener('pointerleave', (e) => { if ((e as PointerEvent).pointerType === 'mouse') resetChartInfo(); });
 
     $('clear-stop').addEventListener('click', () => setState({ stop: null }));
+    $('clear-day').addEventListener('click', () => setState({ sel: null }));
     $('more').addEventListener('click', () => setState({ shown: state.shown + 10 }));
 
     const fallback = JSON.parse($('fallback-csv').textContent || '""') as string;
@@ -310,11 +345,16 @@ const fallbackJson = JSON.stringify(fallbackCsv).replace(/</g, '\\u003c');
     h1, h2, .stat-value { font-family: 'Space Grotesk', Inter, sans-serif; }
 
     .hero { background: var(--ink); color: #fff; padding: 40px 24px 48px; }
-    .hero-inner { max-width: 1120px; margin: 0 auto; display: flex; flex-wrap: wrap; gap: 24px; align-items: flex-end; justify-content: space-between; }
-    .hero-text { max-width: 680px; display: flex; flex-direction: column; gap: 10px; }
+    .hero-inner { max-width: 1120px; margin: 0 auto; display: flex; flex-wrap: wrap; gap: 24px; align-items: stretch; justify-content: space-between; }
+    .hero-text { max-width: 680px; display: flex; flex-direction: column; justify-content: flex-end; gap: 10px; }
     .hero h1 { margin: 0; font-size: clamp(36px, 6vw, 52px); line-height: 1.05; }
     .hero p { margin: 0; font-size: 18px; line-height: 1.5; color: #d6dce8; }
     .hero-link { color: #fde68a; white-space: nowrap; }
+    .home-link, .home-link:hover { color: #fff; text-decoration: none; }
+    .hero-side { display: flex; flex-direction: column; align-items: flex-end; justify-content: space-between; gap: 20px; }
+    .logo { display: block; background: #fff; border-radius: 12px; padding: 8px; line-height: 0; }
+    .logo img { width: 96px; height: auto; }
+    @media (max-width: 640px) { .hero-side { flex-direction: row-reverse; align-items: center; justify-content: space-between; width: 100%; } .logo img { width: 64px; } }
     .hero-link:hover { color: #fff; }
     .cta { display: inline-flex; align-items: center; gap: 10px; background: var(--orange); color: #fff; text-decoration: none; font-weight: 600; font-size: 17px; padding: 14px 22px; border-radius: 10px; min-height: 44px; }
     .cta:hover { background: #9a3412; color: #fff; }
@@ -350,7 +390,8 @@ const fallbackJson = JSON.stringify(fallbackCsv).replace(/</g, '\\u003c');
     .bar-count { font-size: 11px; color: var(--muted); }
     .bar { width: 100%; max-width: 36px; background: var(--accent); border-radius: 4px 4px 0 0; }
     .bar-col { cursor: pointer; outline: none; }
-    .bar-col:hover .bar, .bar-col.active .bar { background: var(--orange); }
+    .bar-col:hover .bar, .bar-col.active .bar { background: #1e3a8a; }
+    .bar-col.selected .bar { background: var(--orange); }
     .bar-col:focus-visible .bar { outline: 2px solid var(--ink); outline-offset: 2px; }
     .chart-info { font-size: 13px; color: var(--muted); }
     .chart-info.on { font-size: 15px; font-weight: 600; color: var(--ink); }
