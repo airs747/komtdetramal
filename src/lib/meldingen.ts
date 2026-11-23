@@ -33,7 +33,13 @@ export function parseCsv(text: string): string[][] {
 
 // Tijdstempel van Google Forms met Engelse instelling: "11/23/2026 16:29:58" (maand/dag/jaar).
 // Valt terug op dag-maand-jaar ("23-11-2026 16:29:58") voor het geval de landinstelling ooit verandert.
+// Ook een kaal serienummer van Sheets ("46349.68748", dagen sinds 30-12-1899) wordt herkend.
 export function parseTimestamp(s: string): number | null {
+  const serial = s.trim().match(/^\d{5}(?:\.\d+)?$/);
+  if (serial) {
+    const u = new Date(Date.UTC(1899, 11, 30) + Math.round(parseFloat(s) * 86400) * 1000);
+    return new Date(u.getUTCFullYear(), u.getUTCMonth(), u.getUTCDate(), u.getUTCHours(), u.getUTCMinutes(), u.getUTCSeconds()).getTime();
+  }
   const m = s.trim().match(/^(\d{1,2})([\/\-.])(\d{1,2})\2(\d{4})(?:\s+(\d{1,2}):(\d{2})(?::(\d{2}))?)?/);
   if (!m) return null;
   let month: number, day: number;
