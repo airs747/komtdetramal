@@ -7,5 +7,9 @@ export const CSV_URL =
 export const FORM_URL =
   'https://docs.google.com/forms/d/1c6GPkEwlg3kDR39IdPJGV2xnxFKcOmI958o5ZN3ZDGo/viewform';
 
+// Vanaf dit moment vraagt het formulier toestemming om de tekst te publiceren.
+// Oudere meldingen tellen mee in de cijfers, maar zonder tekst.
+export const TEXT_SINCE_LABEL = '23 november 2026, 16:00';
+
 export const CDA_URL = 'https://www.cda-amstelveen.nl/';
 export const INFO_URL = 'https://www.cda-amstelveen.nl/lijn25/';

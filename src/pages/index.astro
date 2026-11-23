@@ -81,6 +81,7 @@ const fallbackJson = JSON.stringify(fallbackCsv).replace(/</g, '\\u003c');
         <h2 id="latest-title">Laatste meldingen</h2>
         <div id="latest"></div>
         <button type="button" id="more" class="more" hidden>Toon meer meldingen</button>
+        <p id="no-text-note" class="hint note" hidden></p>
       </section>
     </div>
 
@@ -93,7 +94,7 @@ const fallbackJson = JSON.stringify(fallbackCsv).replace(/</g, '\\u003c');
   <script type="application/json" id="fallback-csv" set:html={fallbackJson}></script>
 
   <script>
-    import { CSV_URL } from '../lib/config';
+    import { CSV_URL, TEXT_SINCE_LABEL } from '../lib/config';
     import { toMeldingen, type Melding } from '../lib/meldingen';
 
     const DAY = 86400000;
@@ -217,8 +218,12 @@ const fallbackJson = JSON.stringify(fallbackCsv).replace(/</g, '\\u003c');
       // hebben geen tekst en tellen alleen mee in de cijfers en de grafiek.
       const withText = filtered.filter((m) => m.tekst);
       const items = withText.slice(0, state.shown);
+      const noText = filtered.length - withText.length;
       if (!items.length) {
-        $('latest').replaceChildren(el('p', 'hint', 'Geen gepubliceerde meldingen voor deze selectie.'));
+        const msg = filtered.length
+          ? 'Voor deze selectie zijn er wel meldingen, maar we tonen geen details.'
+          : 'Geen meldingen voor deze selectie.';
+        $('latest').replaceChildren(el('p', 'hint', msg));
       } else {
         $('latest').replaceChildren(...items.map((m) => {
           const a = el('article', 'melding');
@@ -234,6 +239,11 @@ const fallbackJson = JSON.stringify(fallbackCsv).replace(/</g, '\\u003c');
         }));
       }
       $('more').hidden = withText.length <= state.shown;
+      const note = $('no-text-note');
+      note.hidden = noText === 0;
+      note.textContent = noText === 0 ? '' :
+        (noText === 1 ? '1 melding' : noText + ' meldingen') + ' in deze selectie tellen wel mee in de cijfers, maar staan hier zonder details. ' +
+        'Voor meldingen van vóór ' + TEXT_SINCE_LABEL + ' hebben we in het formulier nog geen toestemming gevraagd om de tekst te publiceren.';
     }
 
     function load(csv: string, live: boolean) {
@@ -343,6 +353,8 @@ const fallbackJson = JSON.stringify(fallbackCsv).replace(/</g, '\\u003c');
     .melding p { margin: 0; font-size: 16px; line-height: 1.5; white-space: pre-line; overflow-wrap: anywhere; }
     .more { margin-top: 8px; align-self: flex-start; border: 1px solid var(--border); background: #fff; color: var(--ink); border-radius: 10px; padding: 10px 16px; font-size: 15px; font-weight: 500; cursor: pointer; min-height: 44px; }
     .more[hidden] { display: none; }
+    .note { margin-top: 12px; padding: 12px 14px; background: var(--bg); border-radius: 8px; line-height: 1.5; }
+    .note[hidden] { display: none; }
 
     footer { font-size: 14px; line-height: 1.6; color: var(--muted); }
     footer p { margin: 0 0 6px; }
