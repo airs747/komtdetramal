@@ -129,6 +129,8 @@ const fallbackJson = JSON.stringify(fallbackCsv).replace(/</g, '\\u003c');
     }
     const pad = (n: number) => (n < 10 ? '0' : '') + n;
     const fmtDay = (d: Date) => d.getDate() + ' ' + MONTHS[d.getMonth()];
+    // Met jaartal als het niet het huidige jaar is.
+    const fmtDayY = (d: Date) => fmtDay(d) + (d.getFullYear() !== new Date().getFullYear() ? ' ' + d.getFullYear() : '');
     const startOfDay = (t: number) => { const d = new Date(t); d.setHours(0, 0, 0, 0); return d.getTime(); };
 
     function setState(patch: Partial<typeof state>) {
@@ -194,12 +196,13 @@ const fallbackJson = JSON.stringify(fallbackCsv).replace(/</g, '\\u003c');
       $('chart').setAttribute('aria-label', 'Staafgrafiek met het aantal meldingen per ' + (daily ? 'dag' : 'week'));
       const bars: HTMLElement[] = [];
       const labels: HTMLElement[] = [];
+      let lastYear = -1;
       counts.forEach((c, j) => {
         const back = nb - 1 - j;
         const end = new Date(today - back * size * DAY);
         const bStart = end.getTime() - (size - 1) * DAY;
         const bEnd = end.getTime() + DAY;
-        const label = daily ? fmtDay(end) : fmtDay(new Date(bStart)) + ' t/m ' + fmtDay(end);
+        const label = daily ? fmtDayY(end) : fmtDayY(new Date(bStart)) + ' t/m ' + fmtDayY(end);
         const tip = (daily ? label : 'week ' + label) + ': ' + c + (c === 1 ? ' melding' : ' meldingen');
         const isSel = !!state.sel && state.sel.start === bStart;
         const col = el('div', 'bar-col' + (isSel ? ' selected' : ''));
@@ -227,7 +230,14 @@ const fallbackJson = JSON.stringify(fallbackCsv).replace(/</g, '\\u003c');
         bar.style.height = Math.round((c / max) * 160) + 'px';
         col.append(bar);
         bars.push(col);
-        labels.push(el('span', '', back % step === 0 ? fmtDay(end) : ''));
+        const lab = el('span');
+        if (back % step === 0) {
+          lab.append(el('span', 'tick-day', fmtDay(end)));
+          const y = end.getFullYear();
+          lab.append(el('span', 'tick-year', y !== lastYear ? String(y) : '\u00a0'));
+          lastYear = y;
+        }
+        labels.push(lab);
       });
       $('chart').replaceChildren(...bars);
       resetChartInfo();
@@ -271,7 +281,7 @@ const fallbackJson = JSON.stringify(fallbackCsv).replace(/</g, '\\u003c');
           const a = el('article', 'melding');
           const meta = el('div', 'meta');
           const d = new Date(m.t);
-          const time = el('time', '', fmtDay(d) + ', ' + pad(d.getHours()) + ':' + pad(d.getMinutes()));
+          const time = el('time', '', fmtDayY(d) + ', ' + pad(d.getHours()) + ':' + pad(d.getMinutes()));
           time.setAttribute('datetime', d.toISOString());
           meta.append(el('strong', '', m.halte));
           if (m.richting) meta.append(el('span', '', m.richting));
@@ -396,7 +406,9 @@ const fallbackJson = JSON.stringify(fallbackCsv).replace(/</g, '\\u003c');
     .chart-info { font-size: 13px; color: var(--muted); }
     .chart-info.on { font-size: 15px; font-weight: 600; color: var(--ink); }
     .chart-labels { display: flex; gap: 4px; min-width: 520px; padding-top: 6px; }
-    .chart-labels span { flex: 1 1 0; text-align: center; font-size: 11px; color: var(--muted); white-space: nowrap; }
+    .chart-labels > span { flex: 1 1 0; text-align: center; font-size: 11px; color: var(--muted); white-space: nowrap; }
+    .tick-day, .tick-year { display: block; }
+    .tick-year { font-weight: 600; color: var(--ink); margin-top: 2px; }
 
     .columns { display: flex; flex-wrap: wrap; gap: 24px; align-items: flex-start; }
     .stops { flex: 1 1 320px; min-width: 0; display: flex; flex-direction: column; gap: 12px; }
