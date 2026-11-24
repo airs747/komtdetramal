@@ -17,7 +17,18 @@ function onOpen() {
     .createMenu('Meldpunt')
     .addItem('Bundel voor GVB (laatste ' + DAGEN + ' dagen)', 'bundelStandaard')
     .addItem('Bundel voor GVB (kies startdatum)', 'bundelVanaf')
+    .addSeparator()
+    .addItem('Ga naar nieuwste melding', 'naarNieuwste')
     .addToUi();
+  naarNieuwste();
+}
+
+// Springt naar de onderste ingevulde rij, in de kolom voor de x (kolom I).
+function naarNieuwste() {
+  const sh = SpreadsheetApp.getActive().getSheetByName(SHEET_NAME);
+  if (!sh) return;
+  sh.activate();
+  sh.setActiveRange(sh.getRange(sh.getLastRow(), 9));
 }
 
 function bundelStandaard() {
