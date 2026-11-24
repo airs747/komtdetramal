@@ -64,7 +64,7 @@ const fallbackJson = JSON.stringify(fallbackCsv).replace(/</g, '\\u003c');
 
     <section class="stats" aria-label="Kerncijfers">
       <div class="card stat"><span class="stat-label">Meldingen</span><span id="stat-total" class="stat-value">–</span><span id="stat-period" class="stat-sub"></span></div>
-      <div class="card stat"><span class="stat-label">Gemiddeld per dag</span><span id="stat-perday" class="stat-value">–</span><span class="stat-sub">meldingen</span></div>
+      <div class="card stat"><span id="trend-label" class="stat-label">Ten opzichte van de periode ervoor</span><span id="stat-trend" class="stat-value">–</span><span id="stat-trend-sub" class="stat-sub"></span></div>
       <div class="card stat"><span class="stat-label">Meeste meldingen</span><span id="stat-top" class="stat-value stat-value-small">–</span><span id="stat-top-count" class="stat-sub"></span></div>
     </section>
 
@@ -173,7 +173,26 @@ const fallbackJson = JSON.stringify(fallbackCsv).replace(/</g, '\\u003c');
       const periodLabel = PERIODS.find((p) => p.v === state.period)!.label;
       $('stat-total').textContent = String(filtered.length);
       $('stat-period').textContent = state.period ? 'in de afgelopen ' + periodLabel : 'sinds de start';
-      $('stat-perday').textContent = (filtered.length / days).toFixed(1).replace('.', ',');
+      // Trend: deze periode tegenover de even lange periode ervoor (bij "Alles": laatste 30 dagen).
+      const tDays = state.period || 30;
+      const tFrom = today - (tDays - 1) * DAY;
+      const pFrom = tFrom - tDays * DAY;
+      const match = (m: Melding) => (state.dir === 'alle' || m.richting === state.dir) && (!state.stop || m.halte === state.stop);
+      const cur = data.filter((m) => m.t >= tFrom && match(m)).length;
+      const prev = data.filter((m) => m.t >= pFrom && m.t < tFrom && match(m)).length;
+      const tLabel = tDays === 7 ? '7 dagen' : tDays === 90 ? '3 maanden' : '30 dagen';
+      $('trend-label').textContent = state.period ? 'Ten opzichte van de periode ervoor' : 'Trend afgelopen 30 dagen';
+      const trendEl = $('stat-trend');
+      trendEl.classList.remove('up', 'down');
+      if (prev === 0) {
+        trendEl.textContent = cur ? 'Nieuw' : '–';
+        $('stat-trend-sub').textContent = 'geen meldingen in de ' + tLabel + ' daarvoor';
+      } else {
+        const pct = Math.round(((cur - prev) / prev) * 100);
+        trendEl.textContent = (pct > 0 ? '+' : '') + pct + '%';
+        if (pct > 0) trendEl.classList.add('up'); else if (pct < 0) trendEl.classList.add('down');
+        $('stat-trend-sub').textContent = cur + ' tegenover ' + prev + ' meldingen in de ' + tLabel + ' daarvoor';
+      }
       const byStop = new Map<string, number>();
       base.forEach((m) => byStop.set(m.halte, (byStop.get(m.halte) || 0) + 1));
       const ranked = [...byStop.entries()].sort((a, b) => b[1] - a[1]);
@@ -392,6 +411,8 @@ const fallbackJson = JSON.stringify(fallbackCsv).replace(/</g, '\\u003c');
     .stat-label { font-size: 14px; color: var(--muted); }
     .stat-value { font-size: 40px; font-weight: 700; }
     .stat-value-small { font-size: 28px; line-height: 1.2; }
+    .stat-value.up { color: var(--orange); }
+    .stat-value.down { color: #15803d; }
     .stat-sub { font-size: 13px; color: var(--muted); }
 
     .chart-scroll { overflow-x: auto; }
