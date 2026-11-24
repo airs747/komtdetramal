@@ -29,9 +29,13 @@ const fallbackJson = JSON.stringify(fallbackCsv).replace(/</g, '\\u003c');
     <div class="hero-inner">
       <div class="hero-text">
         <h1><a class="home-link" href="/">“Komt de tram al?”</a></h1>
-        <p>
-          Meldingen van reizigers over de Amstelveenlijn (lijn 6 en 25). Periodiek sturen we, CDA Amstelveen, een overzicht van de meldingen naar GVB. Meer info of ideeën? Mail Arjen op <a class="hero-link" href="mailto:a.siegmann@amstelveen.nl">a.siegmann@amstelveen.nl</a>.{' '}
-          <a class="hero-link" href={CDA_URL}>Naar CDA Amstelveen</a>
+        <p id="intro">
+          Meldingen van reizigers over de Amstelveenlijn (lijn 6 en 25).{' '}
+          <span id="intro-more" class="intro-more">
+            Periodiek sturen we, CDA Amstelveen, een overzicht van de meldingen naar GVB. Meer info of ideeën? Mail Arjen op <a class="hero-link" href="mailto:a.siegmann@amstelveen.nl">a.siegmann@amstelveen.nl</a>.{' '}
+            <a class="hero-link" href={CDA_URL}>Naar CDA Amstelveen</a>
+          </span>
+          <button type="button" id="intro-toggle" class="intro-toggle" aria-expanded="false" aria-controls="intro-more">Meer info</button>
         </p>
       </div>
       <div class="hero-side">
@@ -64,7 +68,7 @@ const fallbackJson = JSON.stringify(fallbackCsv).replace(/</g, '\\u003c');
 
     <section class="stats" aria-label="Kerncijfers">
       <div class="card stat"><span class="stat-label">Meldingen</span><span id="stat-total" class="stat-value">–</span><span id="stat-period" class="stat-sub"></span></div>
-      <div class="card stat"><span id="trend-label" class="stat-label">Ten opzichte van de periode ervoor</span><span id="stat-trend" class="stat-value">–</span><span id="stat-trend-sub" class="stat-sub"></span></div>
+      <div class="card stat"><span id="trend-label" class="stat-label">T.o.v. de periode ervoor</span><span id="stat-trend" class="stat-value">–</span><span id="stat-trend-sub" class="stat-sub"></span></div>
       <div class="card stat"><span class="stat-label">Meeste meldingen</span><span id="stat-top" class="stat-value stat-value-small">–</span><span id="stat-top-count" class="stat-sub"></span></div>
     </section>
 
@@ -161,7 +165,7 @@ const fallbackJson = JSON.stringify(fallbackCsv).replace(/</g, '\\u003c');
       $('periods').replaceChildren(...PERIODS.map((p) => pill(p.label, p.v === state.period, () => setState({ period: p.v }))));
       $('dirs').replaceChildren(
         pill('Beide', state.dir === 'alle', () => setState({ dir: 'alle' })),
-        ...dirOptions.map((d) => pill(d, state.dir === d, () => setState({ dir: d }))),
+        ...dirOptions.map((d) => pill(d.replace(/^Richting\s+/i, ''), state.dir === d, () => setState({ dir: d }))),
       );
       $('stop-filter').hidden = !state.stop;
       $('stop-name').textContent = state.stop || '';
@@ -181,7 +185,7 @@ const fallbackJson = JSON.stringify(fallbackCsv).replace(/</g, '\\u003c');
       const cur = data.filter((m) => m.t >= tFrom && match(m)).length;
       const prev = data.filter((m) => m.t >= pFrom && m.t < tFrom && match(m)).length;
       const tLabel = tDays === 7 ? '7 dagen' : tDays === 90 ? '3 maanden' : '30 dagen';
-      $('trend-label').textContent = state.period ? 'Ten opzichte van de periode ervoor' : 'Trend afgelopen 30 dagen';
+      $('trend-label').textContent = state.period ? 'T.o.v. de periode ervoor' : 'Trend laatste 30 dagen';
       const trendEl = $('stat-trend');
       trendEl.classList.remove('up', 'down');
       if (prev === 0) {
@@ -259,6 +263,7 @@ const fallbackJson = JSON.stringify(fallbackCsv).replace(/</g, '\\u003c');
         labels.push(lab);
       });
       $('chart').replaceChildren(...bars);
+      $('chart').classList.toggle('many', nb > 14);
       resetChartInfo();
       $('chart-labels').replaceChildren(...labels);
 
@@ -343,6 +348,11 @@ const fallbackJson = JSON.stringify(fallbackCsv).replace(/</g, '\\u003c');
     }
     $('chart').addEventListener('pointerleave', (e) => { if ((e as PointerEvent).pointerType === 'mouse') resetChartInfo(); });
 
+    $('intro-toggle').addEventListener('click', () => {
+      const open = $('intro').classList.toggle('open');
+      $('intro-toggle').setAttribute('aria-expanded', String(open));
+      $('intro-toggle').textContent = open ? 'Minder' : 'Meer info';
+    });
     $('clear-stop').addEventListener('click', () => setState({ stop: null }));
     $('clear-day').addEventListener('click', () => setState({ sel: null }));
     $('more').addEventListener('click', () => setState({ shown: state.shown + 10 }));
@@ -380,10 +390,10 @@ const fallbackJson = JSON.stringify(fallbackCsv).replace(/</g, '\\u003c');
     .hero p { margin: 0; font-size: 18px; line-height: 1.5; color: #d6dce8; }
     .hero-link { color: #fde68a; white-space: nowrap; }
     .home-link, .home-link:hover { color: #fff; text-decoration: none; }
+    .intro-toggle { display: none; background: none; border: 0; padding: 0; font: inherit; color: #fde68a; text-decoration: underline; cursor: pointer; }
     .hero-side { display: flex; flex-direction: column; align-items: flex-end; justify-content: space-between; gap: 20px; }
     .logo { display: block; background: #fff; border-radius: 12px; padding: 8px; line-height: 0; }
     .logo img { width: 96px; height: auto; }
-    @media (max-width: 640px) { .hero-side { flex-direction: row-reverse; align-items: center; justify-content: space-between; width: 100%; } .logo img { width: 64px; } }
     .hero-link:hover { color: #fff; }
     .cta { display: inline-flex; align-items: center; gap: 10px; background: var(--orange); color: #fff; text-decoration: none; font-weight: 600; font-size: 17px; padding: 14px 22px; border-radius: 10px; min-height: 44px; }
     .cta:hover { background: #9a3412; color: #fff; }
@@ -457,6 +467,53 @@ const fallbackJson = JSON.stringify(fallbackCsv).replace(/</g, '\\u003c');
 
     footer { font-size: 14px; line-height: 1.6; color: var(--muted); }
     footer p { margin: 0 0 6px; }
+    /* Telefoon staand: compacter, zodat de meldingen sneller in beeld zijn. */
+    @media (max-width: 640px) {
+      .hero { padding: 20px 16px 28px; }
+      .hero-inner { display: grid; grid-template-columns: 1fr auto; grid-template-areas: "text logo" "cta cta"; gap: 14px 12px; align-items: start; }
+      .hero-text { grid-area: text; gap: 6px; }
+      .hero-side { display: contents; }
+      .logo { grid-area: logo; padding: 4px; border-radius: 8px; }
+      .logo img { width: 52px; }
+      .cta { grid-area: cta; justify-content: center; padding: 10px 16px; font-size: 16px; }
+      .hero h1 { font-size: 30px; }
+      .hero p { font-size: 14px; line-height: 1.45; }
+      .intro-toggle { display: inline; }
+      .intro-more { display: none; }
+      #intro.open .intro-more { display: inline; }
+      #intro.open .intro-toggle { margin-left: 6px; }
+
+      main { padding: 0 12px 40px; gap: 12px; margin-top: -14px; }
+      .card { padding: 16px; border-radius: 12px; }
+      .card h2 { font-size: 19px; }
+
+      .filters { padding: 12px 8px 12px 12px; gap: 8px; flex-direction: column; align-items: stretch; }
+      .group { flex-wrap: nowrap; gap: 5px; overflow-x: auto; scrollbar-width: none; }
+      .group::-webkit-scrollbar { display: none; }
+      .group-label { min-width: 52px; font-size: 12px; flex: none; margin-right: 0; }
+      .pills { flex-wrap: nowrap; gap: 5px; }
+      .pill { padding: 6px 9px; font-size: 13px; min-height: 38px; white-space: nowrap; flex: none; }
+      .chart-info { font-size: 12px; }
+
+      .stats { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+      .stat { padding: 10px; gap: 2px; }
+      .stat-label { font-size: 11px; line-height: 1.3; }
+      .stat-value { font-size: 24px; }
+      .stat-value-small { font-size: 15px; overflow-wrap: anywhere; }
+      .stat-sub { font-size: 11px; line-height: 1.3; }
+      #stat-trend-sub { display: none; }
+
+      .card-head { margin-bottom: 8px; flex-direction: column; gap: 2px; }
+      .chart { height: 130px; min-width: 0; gap: 2px; }
+      .chart-labels { min-width: 0; gap: 2px; }
+      .chart.many .bar-count { display: none; }
+
+      .columns { flex-direction: column; gap: 12px; }
+      .latest { order: -1; flex-basis: auto; width: 100%; }
+      .stops { flex-basis: auto; width: 100%; }
+      .melding { padding: 10px 0; }
+      .melding p { font-size: 15px; }
+    }
   </style>
 </body>
 </html>
