@@ -12,4 +12,4 @@ export const FORM_URL =
 export const TEXT_SINCE_LABEL = '23 november 2026, 16:00';
 
 export const CDA_URL = 'https://www.cda-amstelveen.nl/';
-export const INFO_URL = 'https://www.cda-amstelveen.nl/lijn25/';
+export const INFO_URL = 'https://www.cda.nl/noord-holland/amstelveen/lijn-25/';
