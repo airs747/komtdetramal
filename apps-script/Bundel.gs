@@ -19,7 +19,26 @@ function onOpen() {
     .addItem('Bundel voor GVB (kies startdatum)', 'bundelVanaf')
     .addSeparator()
     .addItem('Ga naar nieuwste melding', 'naarNieuwste')
+    .addItem('Toon alleen te beoordelen meldingen', 'filterTeBeoordelen')
     .addToUi();
+  filterTeBeoordelen();
+}
+
+// Zet het filter opnieuw, over ALLE rijen, zodat ook nieuwe meldingen meedoen:
+// alleen rijen waar kolom E (oud datumveld) en kolom I (de x) leeg zijn.
+function filterTeBeoordelen() {
+  const sh = SpreadsheetApp.getActive().getSheetByName(SHEET_NAME);
+  if (!sh) return;
+  try {
+    const oud = sh.getFilter();
+    if (oud) oud.remove();
+    const leeg = SpreadsheetApp.newFilterCriteria().whenCellEmpty().build();
+    sh.getRange(1, 1, sh.getLastRow(), 9).createFilter()
+      .setColumnFilterCriteria(COL.dagTijd, leeg)
+      .setColumnFilterCriteria(9, leeg);
+  } catch (e) {
+    SpreadsheetApp.getActive().toast('Filter zetten lukte niet: ' + e.message, 'Meldpunt', 10);
+  }
   naarNieuwste();
 }
 
