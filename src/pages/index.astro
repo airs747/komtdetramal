@@ -32,14 +32,13 @@ const fallbackJson = JSON.stringify(fallbackCsv).replace(/</g, '\\u003c');
         <p id="intro">
           Meldingen van reizigers over de Amstelveenlijn (lijn 6 en 25).{' '}
           <span id="intro-more" class="intro-more">
-            Periodiek sturen we, CDA Amstelveen, een overzicht van de meldingen naar GVB. Meer info of ideeën? Mail Arjen op <a class="hero-link" href="mailto:a.siegmann@amstelveen.nl">a.siegmann@amstelveen.nl</a>.{' '}
-            <a class="hero-link" href={CDA_URL}>Naar CDA Amstelveen</a>
+            Periodiek sturen we, CDA Amstelveen, een overzicht van de meldingen naar GVB. Meer info of ideeën? Mail Arjen op <a class="hero-link" href="mailto:a.siegmann@amstelveen.nl">a.siegmann@amstelveen.nl</a>.
           </span>
           <button type="button" id="intro-toggle" class="intro-toggle" aria-expanded="false" aria-controls="intro-more">Meer info</button>
         </p>
       </div>
       <div class="hero-side">
-        <a class="logo" href={CDA_URL} aria-label="CDA Amstelveen">
+        <a class="logo" href={CDA_URL} aria-label="Naar de website van CDA Amstelveen" title="Naar cda-amstelveen.nl">
           <img src="/cda-amstelveen.png" alt="CDA Amstelveen" width="96" height="104" />
         </a>
         <a class="cta" href={FORM_URL}>
