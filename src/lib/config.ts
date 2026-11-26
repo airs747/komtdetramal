@@ -10,6 +10,8 @@ export const FORM_URL =
 // Vanaf dit moment vraagt het formulier toestemming om de tekst te publiceren.
 // Oudere meldingen tellen mee in de cijfers, maar zonder tekst.
 export const TEXT_SINCE_LABEL = '23 november 2026, 16:00';
+// Hetzelfde moment als tijdstip. Meldingen vanaf dit moment zonder tekst koos de melder zelf voor "Liever niet".
+export const TEXT_SINCE = new Date(2026, 10, 23, 16, 0).getTime();
 
 export const CDA_URL = 'https://www.cda-amstelveen.nl/';
 export const INFO_URL = 'https://www.cda.nl/noord-holland/amstelveen/lijn-25/';

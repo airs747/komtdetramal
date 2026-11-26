@@ -106,7 +106,7 @@ const fallbackJson = JSON.stringify(fallbackCsv).replace(/</g, '\\u003c');
   <script type="application/json" id="fallback-csv" set:html={fallbackJson}></script>
 
   <script>
-    import { CSV_URL, TEXT_SINCE_LABEL } from '../lib/config';
+    import { CSV_URL, TEXT_SINCE_LABEL, TEXT_SINCE } from '../lib/config';
     import { toMeldingen, type Melding } from '../lib/meldingen';
 
     const DAY = 86400000;
@@ -291,7 +291,8 @@ const fallbackJson = JSON.stringify(fallbackCsv).replace(/</g, '\\u003c');
       let title = sel ? 'Meldingen ' + (sel.daily ? 'op ' : 'in de week van ') + sel.label : 'Laatste meldingen';
       if (state.stop) title += ' bij ' + state.stop;
       $('latest-title').textContent = title;
-      const withText = listSource.filter((m) => m.tekst);
+      // In de lijst: meldingen met tekst, en nieuwe meldingen waarbij de melder koos voor "Liever niet".
+      const withText = listSource.filter((m) => m.tekst || m.t >= TEXT_SINCE);
       const items = withText.slice(0, state.shown);
       const noText = listSource.length - withText.length;
       if (!items.length) {
@@ -309,7 +310,7 @@ const fallbackJson = JSON.stringify(fallbackCsv).replace(/</g, '\\u003c');
           meta.append(el('strong', '', m.halte));
           if (m.richting) meta.append(el('span', '', m.richting));
           meta.append(time);
-          a.append(meta, el('p', '', m.tekst));
+          a.append(meta, m.tekst ? el('p', '', m.tekst) : el('p', 'not-shared', '[niet gedeeld]'));
           return a;
         }));
       }
@@ -317,7 +318,7 @@ const fallbackJson = JSON.stringify(fallbackCsv).replace(/</g, '\\u003c');
       const note = $('no-text-note');
       note.hidden = noText === 0;
       note.textContent = noText === 0 ? '' :
-        (noText === 1 ? '1 melding' : noText + ' meldingen') + ' in deze selectie tellen wel mee in de cijfers, maar staan hier zonder details. ' +
+        (noText === 1 ? '1 oudere melding in deze selectie telt' : noText + ' oudere meldingen in deze selectie tellen') + ' wel mee in de cijfers, maar staan hier niet in de lijst. ' +
         'Voor meldingen van vóór ' + TEXT_SINCE_LABEL + ' hebben we in het formulier nog geen toestemming gevraagd om de tekst te publiceren.';
     }
 
@@ -458,6 +459,7 @@ const fallbackJson = JSON.stringify(fallbackCsv).replace(/</g, '\\u003c');
     .melding { display: flex; flex-direction: column; gap: 6px; padding: 14px 0; border-top: 1px solid var(--line); }
     .melding .meta { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 13px; color: var(--muted); }
     .melding .meta strong { color: var(--ink); }
+    .melding p.not-shared { color: var(--muted); font-style: italic; }
     .melding p { margin: 0; font-size: 16px; line-height: 1.5; white-space: pre-line; overflow-wrap: anywhere; }
     .more { margin-top: 8px; align-self: flex-start; border: 1px solid var(--border); background: #fff; color: var(--ink); border-radius: 10px; padding: 10px 16px; font-size: 15px; font-weight: 500; cursor: pointer; min-height: 44px; }
     .more[hidden] { display: none; }
